@@ -1,0 +1,178 @@
+***To Run UEapp on x86
+    cp ~/ueapp-deps-x86/asn1c/asn1c/asn1c ./
+export RTE_SDK=/home/wisig/ueapp-deps-x86/dpdk-c-build/dpdk-stable-20.02.1/
+export RTE_TARGET=x86_64-native-linux-gcc
+./configure –generate-asn1c 
+
+
+***To Run UEapp on ARM board
+l
+cp ~/ueapp-deps-arm/asn1c/asn1c/asn1c ./
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+./configure --armlibc=/tools/Xilinx/SDK/2018.3/gnu/aarch64/lin/aarch64 -linux/aarch64-linux-gnu/libc/usr/include --generate-asn1c
+make clean;make -j9
+binary file
+
+
+*** this on arm customized terminal***
+lib* x6 files and .json files 3 copy to arm terminal
+copy lib* to /usr/lib/ or copy libnuma.so.1 to /usr/lib64/
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+cat /proc/meminfo
+
+sudo ./build/ueapp --file-prefix=0
+
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start
+
+
+***For BoardUp Process
+sudo bmaptool copy --bmap IMAGE_NAME-bcm-2xxx-rpi4.wic.bmap IMAGE_NAME-bcm-2xxx-rpi4.wic /dev/sdb
+setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4'
+mmc rescan
+fatload mmc 0 0x10000000 Image
+fatload mmc 0 0x20000000 zynqmp-zcu102-rev1.0.dtb    
+booti 0x10000000 - 0x20000000
+
+
+****the above path is about petalinux-building over the internet
+~/11peta/components/yocto/source/aarch64/layers/meta-xilinx/meta-xilinx-bsp/recipes-kernel/linux
+***Patching the kernal 
+git branchgit 
+git branch -r
+git checkout xlnx_rebase_v4.19
+cp ~/Downloads/patch-4.19-rt1.patch.gz ../linux-xlnx/
+zcat patch-4.19-rt1.patch.gz | patch -p1 
+
+
+***For windriver image building process
+ Git link wrlinux-x:
+1) create a new directory-
+    {mkdir -p project
+     cd project}
+2) paste-
+    {git clone --branch WRLINUX_10_21_BASE_UPDATE0007 https://github.com/WindRiver-Labs/wrlinux-x.git}
+3) Run setup.sh- 
+    {./wrlinux-x/setup.sh --machines (xilinx-zynqmp /  bcm-2xxx-rpi4 / qemux86-64)}
+4) Paste-
+    {. ./environment-setup-x86_64-wrlinuxsdk-linux}
+    and 
+    {. ./oe-init-build-env}
+5) It will create conf in /build. Now, change the [local.conf]
+    (BB_NO_NETWORK ?= '0') and (WRTEMPLATE ?= "feature/gdb feature/busybox") save and exit.
+6) Run-
+{bitbake (wrlinux-image-small / wrlinux-image-core / wrlinux-image-std / wrlinux-image-std-sato)}
+7) Images will create in {/build/tmp-glibc/deploy/images/ (xilinx-zynqmp / bcm-2xxx-rpi4)}
+8) Change the menuconfigurations -
+    { bitbake -c menuconfig linux-yocto }
+9) do_build -
+    { bitbake -C do_build linux-yocto }
+10) { bitbake wrlinux-image-small }
+
+
+***For Petalinux Image Building
+petalinux-create -t project --template zynqMP -n linux_images
+cd linux_images
+petalinux-config --get-hw-description=<path to HDF>
+DTG Settings → (zcu102-rev1.0) MACHINE_NAME
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+petalinux-config -c kernel
+***Enable the uio's and irq's in kernal
+include/ "project-spec/meta-user/recipes-bsp/device-tree/files/system-conf.dtsi"
+/ {
+    chosen {
+        bootargs = "earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio";
+        stdout-path = "serial0:115200n8";
+    };
+};
+&irqAXI_v1_0_0 {
+    compatible = "generic-uio";
+};
+petalinux-build
+​
+to remove the build folder : < petalinux-build -x mrproper >
+​
+petalinux-package --boot --format BIN --fsbl images/linux/zynqmp_fsbl.elf --u-boot images/linux/u-boot.elf --pmufw images/linux/pmufw.elf --fpga images/linux/*.bit --force
+cp image.ub BOOT.BIN /media/boot/
+tar -xvf  rootfs.tar.gz -C /media/rootfs/
+
+
+***Enabling the gpio pins on xilinux boards
+ Export a GPIO pin */
+> root@xilinx-zcu102-2017_3:~# echo 338 > /sys/class/gpio/export
+  
+/* Read the direction and value from the GPIO pin */
+> root@xilinx-zcu102-2017_3:~# ls /sys/class/gpio/gpio338/
+  Output:
+  active_low  direction  power  uevent  device  edge  subsystem  value
+> root@xilinx-zcu102-2017_3:~# cat /sys/class/gpio/gpio338/direction
+  Output:
+  in
+> root@xilinx-zcu102-2017_3:~# cat /sys/class/gpio/gpio338/value
+  Output:
+  0
+  
+/* Set the direction to an output and write a value 1 to GPIO pin */
+> root@xilinx-zcu102-217_3:~# ls /sys/class/gpio/gpio338
+  Output:
+  active_low  direction  power  uevent  device  edge  subsystem  value
+> root@xilinx-zcu102-2017_3:~# echo out > /sys/class/gpio/gpio338/direction
+> root@xilinx-zcu102-2017_3:~# echo 1 > /sys/class/gpio/gpio338/value
+
+
+>lttng-ust for function level profiling
+gcc   -g -finstrument-functions
+lttng enable-event -u -a
+lttng add-context -u -t vpid -t ip
+lttng add-context -u -t vpid -t vtid -t procname
+LD_PRELOAD=/path/to/liblttng-ust-dl.so ./myprogram     or for arm LD_PRELOAD=/path/to/liblttng-ust-dl.so.0
+LD_PRELOAD=/usr/lib/liblttng-ust-cyg-profile.so ./myprogram
+
+
+>adding pl to windriver image on board
+design_1_wrapper.hdf make this file ti zip
+unzip file and create
+    $vi bootbi.bif
+        all:
+        {
+          design_1_wrapper.bit
+        }
+         (save & exit)
+$source here
+ bootgen -image bootbi.bif -arch zynqmp -process_bitstream bin
+ 
+ 
+>CPU Profiling At Function Level
+apt-get install binutils
+gcc -Wall -std=c99 test_gprof.c -o test_gprof
+gcc -Wall -std=c99 -pg test_gprof.c -o test_gprof
+./test_gprof
+ls gmon*
+gmon.out
+gprof test_gprof gmon.out > profile-data.txt
+gcc -pg -ggdb3 -O3 -std=c99 -Wall -Wextra -pedantic -o main.out main.c
+-z  Displays routines that have zero usage (as indicated by call counts and accumulated time). and static functions 
+-d       specifies debugging options. If num is not specified, enable all debugging
+-i      File `gmon.out' (version 1) contains:
+    1 histogram record
+    7 call-graph records
+    0 basic-block count records
+-a       option causes gprof to suppress the printing of statically declared (private) functions
+
+--> To create a static IP :
+Sudo ifconfig eth0 190.168.74.120 up
+sudo ifconfig eno1 190.168.74.120 down
+
+
