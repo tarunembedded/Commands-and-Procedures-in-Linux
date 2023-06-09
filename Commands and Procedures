@@ -60,7 +60,7 @@ wue(run)>> ue
 start
 
 
-***For BoardUp Process
+***For Board Up Process
 sudo bmaptool copy --bmap IMAGE_NAME-bcm-2xxx-rpi4.wic.bmap IMAGE_NAME-bcm-2xxx-rpi4.wic /dev/sdb
 setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4'
 mmc rescan
@@ -302,3 +302,466 @@ wue>> run
 wue(run)>> ue
 start
 
+***Vivado licence statements***
+export XILINXD_LICENSE_FILE=2100@192.168.131.9
+In which path we need to add this?
+Vivado/2019.2/settings.sh 
+
+****Bootargs Parameters***
+setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4 isolcpus=3'
+mmc rescan
+fatload mmc 0 0x10000000 Image
+load mmc 0 0x20000000 system.bit.bin
+fpga load 0 0x20000000 $filesize
+fatload mmc 0 0x30000000 system.dtb
+booti 0x10000000 - 0x30000000
+ 				
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+exit
+
+***We need to know the source path***
+source /tools/Xilinx/SDK/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+
+
+****Procedure to create Image in Windriver Linux****
+1) create a new directory-
+    {mkdir -p project
+     cd project}
+2) paste-
+    {git clone --branch WRLINUX_10_21_BASE_UPDATE0007 https://github.com/WindRiver-Labs/wrlinux-x.git}
+3) Run setup.sh- 
+    {./wrlinux-x/setup.sh --machines (xilinx-zynqmp /  bcm-2xxx-rpi4 / qemux86-64)}
+4) Paste-
+    {. ./environment-setup-x86_64-wrlinuxsdk-linux}
+    and 
+    {. ./oe-init-build-env}
+5) It will create conf in /build. Now, change the [local.conf]
+    (BB_NO_NETWORK ?= '0') and (WRTEMPLATE ?= "feature/gdb feature/busybox") save and exit.
+6) Run-
+{bitbake (wrlinux-image-small / wrlinux-image-core / wrlinux-image-std / wrlinux-image-std-sato)}
+7) Images will create in {/build/tmp-glibc/deploy/images/ (xilinx-zynqmp / bcm-2xxx-rpi4)}
+8) Change the menuconfigurations -
+    { bitbake -c menuconfig linux-yocto }
+    
+👉️In kernel menuconfig, Enable the following: 
+i) NUMA Memory Allocation
+ii) VFIO Non-Privileged Userspace
+iii) IOMMU Hardware Support
+9) do_build -
+    { bitbake -C do_build linux-yocto }
+10) { bitbake wrlinux-image-small }
+    
+11) Booting the image to sd card
+{ sudo bmaptool copy --bmap IMAGE_NAME-bcm-2xxx-rpi4.wic.bmap IMAGE_NAME-bcm-2xxx-rpi4.wic /dev/sdx }
+12) Insert sd card into the board, in u-boot -
+    { setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4' }
+    
+    to isolate cpu's:
+    
+    { setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 isolcpus=1-3 maxcpus=4' }
+                                                                                    
+    to check whether the cpu's isolated or not:
+    
+            { cat /sys/devices/system/cpu/isolated }
+            
+13) Give the following commands-
+    { => mmc rescan
+      => fatload mmc 0 0x10000000 Image
+      => fatload mmc 0 0x11800000 zynqmp-zcu102-rev1.0.dtb
+      => booti 0x10000000 - 0x11800000 }
+      
+      
+     
+      
+👉️CREATING IMAGE WITH EXTERNAL HDF/XSA FILE :  (adding Patch file)
+      
+      i) After step-4 {. ./oe-init-build-env} in the above procedure...
+                
+              edit "local.conf" (vi build/conf/local.conf)
+              add the following at the End of Code.
+PNWHITELIST_xilinx += 'device-tree'
+PNWHITELIST_xilinx += 'python3-dtc'
+PNWHITELIST_xilinx-tools += 'external-hdf'
+HDF_BASE = "file://"
+HDF_PATH = "/< path-to-hdf >/system.xsa"
+HDF_MACHINE = "zcu102-zynqmp"
+        save and exit
+    
+    ii) Add patch in the path   <cd layers/xilinx-zynqmp>
+    
+            (We Received the patch file from xilinx through mail)
+            
+            patch -p1 <  $YOUR_PATH_TO_PATCH/1.patch
+            
+    iii) bibake device-tree (to build   <xilinx-zynqmp-system.dtb>   in /build/tmb-glibc/deploy/images/xilinx-zynqmp/)
+      
+👉️Adding system.bin file in sd card boot partition:
+    In (/home/windriver_hdf/feb2/design_1_wrapper) 
+        Here, rename design_1_wrapper.bit to system.bit.
+    
+    create (vi bootbi.bif)
+            
+        all:
+        {
+         system.bit
+        }
+                save & exit.
+        To convert .bif to .bin:
+                (bootgen -image bootbi.bif -arch zynqmp -o ./system.bin -w)
+        Add .bin file in sd card boot.
+        
+        
+****Petalinux Image Breif Start****
+petalinux-create --type project --template <PLATFORM> --name
+zynqMP
+petalinux-config --get-hw-description=<path-to-directory-containing-hardware
+description-file>
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+petalinux-config -c kernel
+petalinux-config -c rootfs
+petalinux-build
+
+***********************Petalinux start *********************************
+​
+petalinux-create --type project --template <PLATFORM> --name 
+​
+zynqMP
+​
+​
+petalinux-config --get-hw-description=<path-to-directory-containing-hardware
+description-file>
+​
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+​
+petalinux-config -c kernel
+​
+Enable the Xilinx PHY driver and Disable the AXI DMA driver
+Device Drivers> Network device support > PHY Device support and infrastructure >
+<*> Drivers for xilinx PHYs
+Device Drivers> DMA Engine Support> <> Xilinx AXI DMAS Engine
+Save the changes and exit.
+​
+​
+vi project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi
+​
+/include/ "system-conf.dtsi"
+/ {
+};
+&xxv_ethernet_0 {
+local-mac-address = [00 0a 35 00 00 00];
+};
+​
+​
+mkdir -p project-spec/meta-user/recipes-bsp/fsbl/files
+​
+​
+cp /home/lakshman/Desktop/0001-sw_apps-zynqmp_fsbl-Fix-for-Boot-Issues-with-new-DIM.patch project-spec/meta-user/recipes-bsp/fsbl/files
+​
+vim project-spec/meta-user/recipes-bsp/fsbl/fsbl_%.bbappend
+​
+# Patch for FSBL
+# Note: do_configure_prepend task section is required only for 2017.1 release
+# Refer https://github.com/Xilinx/meta-xilinx-tools/blob/rel-v2017.2/classes/xsctbase.bbclass#L29-L35
+​
+  
+do_configure_prepend() {
+    if [ -d "${S}/patches" ]; then
+       rm -rf ${S}/patches
+    fi
+  
+    if [ -d "${S}/.pc" ]; then
+       rm -rf ${S}/.pc
+    fi
+}
+  
+SRC_URI_append = " \
+        file://0001-sw_apps-zynqmp_fsbl-Fix-for-Boot-Issues-with-new-DIM.patch \
+        "
+  
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+  
+#Add debug for FSBL(optional)
+XSCTH_BUILD_DEBUG = "1"
+  
+#Enable appropriate FSBL debug flags
+YAML_COMPILER_FLAGS_append = " -DXPS_BOARD_ZCU102"
+  
+# Note: This is not required if you are using Yocto
+# CAUTION!: EXTERNALXSCTSRC and EXTERNALXSCTSRC_BUILD is required only for 2018.2 and below petalinux releases
+EXTERNALXSCTSRC = ""
+EXTERNALXSCTSRC_BUILD = ""
+​
+​
+petalinux-build
+​
+to remove the build folder : < petalinux-build -x mrproper >
+​
+petalinux-package --boot --format BIN --fsbl images/linux/zynqmp_fsbl.elf --u-boot images/linux/u-boot.elf --pmufw images/linux/pmufw.elf --fpga images/linux/*.bit --force
+​
+​
+***********************Petalinux End *********************************
+​
+​
+Kernel confile are located in this path petalinux
+build/tmp/work/plnx_zynqmp-xilinx-linux/linux-xlnx/4.19-xilinx-v2019.2+git999-r0/linux-xlnx-4.19-xilinx-v2019.2+git999/.configmanikothuri@manikothuri-OptiPlex-7060
+​
+​
+​
+​
+/home/lakshman/mani_petalinux_project/30Mzh_adrv/meta-adi/meta-adi-core
+​
+​
+​
+/home/lakshman/mani_petalinux_project/30Mhz_adrv/meta-adi/meta-adi-core
+​
+​
+IIO comands
+tar -xvf  rootfs.tar.gz -C /media/rootfs/
+tar -xvf  rootfs.tar.gz -C /media/rootfs/
+​
+setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4'
+​
+saveenv
+boot
+​
+​
+petalinux-package --boot --format BIN --fsbl images/linux/zynqmp_fsbl.elf --u-boot images/linux/u-boot.elf --pmufw images/linux/pmufw.elf --add images/linux/dmar5.elf --cpu=r5-0 --fpga images/linux/*.bit -
+​
+Interrupt numbers
+https://www.xilinx.com/support/documentation/ip_documentation/zynq_ultra_ps_e/v3_2/pg201-zynq-ultrascale-plus-processing-system.pdf
+Page number 13
+​
+A53 on linux and R5 barematel address
+https://forums.xilinx.com/t5/Embedded-Linux/A53-Petalinux-with-R5-running-baremetal-freertos-interrupt/m-p/1154301#M45525
+​
+Working images 
+testing_bareatel_ila
+​
+ kothurimanikanta@5g.iith.ac.in
+​
+configured out.
+​
+username :lalithaditya
+password :Lalith@418
+​
+​
+Time calculation on board R5
+​
+​
+#include "xtime_l.h"
+​
+XTime tStart, tEnd;float us;
+​
+			//  XTime_GetTime(&tStart);
+​
+			dma = axi_dmac_transfer(rx_dmac, Buffer2_address, MAX_PKT_LEN1);
+#if 0
+			XTime_GetTime(&tEnd);
+			us=(1.0 * (tEnd - tStart) / (COUNTS_PER_SECOND/1000000));
+			printf("Micros seconds %.2f\n ",us);
+			//printf("mbps %.2f\n",(((1000000/us)*(MAX_PKT_LEN*NUMBER_OF_TRANSFERS))/1000000)*8);
+#endif
+		struct timespec start, stop;
+Time calculation on linux 
+​
+​
+​
+ clock_gettime(CLOCK_REALTIME, &startTime);
+        wnSnow3gGenKs ( numWords, keyStr, &s3gVarst );
+        clock_gettime(CLOCK_REALTIME, &endTime);
+         executionTime1 = ((endTime.tv_sec - startTime.tv_sec)*1000 + (endTime.tv_nsec - startTime.tv_nsec)/(1.0*1000000));
+        executionTime1 = executionTime1*1000000;
+        printf("\nExecution Time wnSnoGenks   = %0.0f nano seconds\n", executionTime1);
+​
+​
+​
+//                      clock_gettime(CLOCK_REALTIME, &startTime);
+#if 1
+                        //      clock_gettime(CLOCK_REALTIME, &endTime);
+                        //      double executionTime = ((endTime.tv_sec - startTime.tv_sec)*1000 + (endTime.tv_nsec - startTime.tv_nsec)/(1.0*1000000));
+                        //      executionTime = executionTime*1000000;
+                        //      printf("\nExecution Time  = %0.0f nano seconds\n", executionTime);
+#endif
+​
+​
+​
+linkedin vivado tutorial
+https://www.linkedin.com/pulse/gpio-petalinux-part-2-roy-messinger/?articleId=6678028464081170432
+​
+&irqAXI_0 {
+        interrupts = <0 90 1>;
+        compatible = "generic-uio";
+        status = "disabled";
+};
+​
+​
+0x70000000 0x6FFFFFFF
+Enable GPU Libraries and Other Packages in RootFS in ug1209
+​
+cat /proc/cpuinfo in ARM
+​
+PDSCH coding decoding ,LDPC,acutal data contains DCI(down link control information)
+​
+​
+Run freertos on VITIS
+​
+Step 1: Run default 
+​
+Step 2: Enable the A53,R5 reset in debug
+​
+Step 3: Change the linkerscripter to DDR
+​
+​
+Gcc in petalinux link
+https://github.com/openembedded/openembedded-core/blob/master/meta/recipes-core/packagegroups/packagegroup-core-buildessential.bb
+​
+Datagen Path 2018.3
+/home/manikothuri/vivadohls/hlspractise/simple_axis_counter/solution1
+​
+meta-user/recipes-core/images/petalinux-user-image.bbappend
+​
+gcc enable path
+~/mani_petalinux/zcu102/zcu102_bsp/xilinx-zcu102-2018.3/images/linux
+​
+vivado workspace of snow3g_pdcp
+vivado_practise/SG_dma_snow3g_kiran/
+​
+vitis SDk work space  of snow3g_workspace
+vivado_practise/SG_dma_snow3g_kiran_sdk_tkeep_high/
+​
+echo 1 > /sys/class/gpio/gpio416/value
+​
+Porting images path
+~/mani_petalinux/zcu102/zcu102_bsp/xilinx-zcu102-2018.3/images/linux
+​
+	/home/lakshman/Documents/Porting_working_images
+​
+Testing input for snow3g ip is axiread_ip
+export RTE_SDK=/home/username/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+​
+make -j CROSS=aarch64-linux-gnu- CONFIG_RTE_KNI_KMOD=n CONFIG_RTE_EAL_IGB_UIO=n
+​
+mount -t hugetlbfs nodev /mnt/huge
+echo 1024 >  /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepage
+aarch64-linux-gnu-gcc
+​
+Snow3g multiple ip's path in linux
+/home/manikothuri/snow3g/snow3g_duplicateNoChange/snow3g_duplicate
+​
+To find the cpu clock frequency in xilinx linux(zcu102 board)
+/sys/devices/system/cpu/cpu0/cpufreq
+​
+Git password
+Nani@0512
+​
+Simple R5 application running
+https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/18842048/ZU+Example+-+PM+Hello+World
+​
+Physical address of linux on zcu102 board
+ls -l /sys/bus/platform/devices/
+​
+Dma proxy example 
+https://github.com/mstuehn/dma_proxy/blob/master/dma_proxy_test.c
+​
+​
+Mathalogy and Action labs youtube channel
+​
+DMA Linux user space API links
+https://www.hackster.io/whitney-knitter/introduction-to-using-axi-dma-in-embedded-linux-5264ec#code
+https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/1027702787/Linux+DMA+From+User+Space+2.0
+https://github.com/Xilinx/linux-xlnx/blob/master/drivers/dma/xilinx/axidmatest.c
+https://github.com/Xilinx-Wiki-Projects/software-prototypes/blob/master/linux-user-space-dma/Software/User/dma-proxy-test.c
+​
+vivado_snow3g_worksapce with A53 linux workspace
+vivado_practise/simple_DMA-2019.2
+​
+​
+FPGA tutorial read when your are free
+https://medium.com/@aptaylorceng/microzed-chronicles-hls-working-with-loops-188787a04f1a
+​
+​
+file:///home/manikothuri/Downloads/201412-286%20(1).pdf
+​
+setenv bootargs 'console=ttyPS0,115200n8 root=/dev/mmcblk0p2 rw  rootfstype=ext4 rootwait earlycon clk_ignore_unused   uio_pdrv_genirq.of_id=generic-uio cpuidle.off=1 maxcpus=4'
+​
+=> mmc rescan
+	=> fatload mmc 0 0x10000000 Image
+	=> fatload mmc 0 0x11800000 zynqmp-zcu102-rev1.0.dtb
+	=> booti 0x10000000 - 0x11800000
+​
+​
+ ln -s libnuma.so.1.0.0 libnuma.so.1
+- copy libnuma.so.1 to /usr/lib/
+[5:04 PM] mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepage
+​
+~/mani_petalinux/zcu102/openAMP_linux_userspace/xilinx-zcu102-2018.3/images/linux
+​
+​
+​
+​
+Commands to Run UE_APP
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start
+​
+Wind River Linux LTS 21.20 Update 7
+          
+--->For Mounting in Particular Partition :
+sudo mount /dev/sdx <dir>
+cp BOOT.BIN  /media/wisig/boot
+
+--->To Change the Configurations in Proc Directory , Access through the Root
+sysctl -w kernel.<file name>="change whatever you want"
+Ex : sysctl -w kernel.sysrq="1"
+
+--->To know the PID : pidof -s firefox
+
+--->To know the current scheduling policy and current scheduling priority of the PID :
+chrt -p 5794
+
+--->To change the current scheduling Policy and Priority : sudo chrt -(f,b,i,o) -p 5794
+
+*****For cross-compiling ueapp*****
+export RTE_TARGET=arm64-armv8a-linux-gcc
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+make -j(NOOF_WORKERS)
+cd into build directory to get ueapp
+scp ueapp root@192.168.74.47:/root/ueapp_pdcch_prach_pucch_ssb
+
+--->To check if core isolation succeeded, :
+cat /sys/devices/system/cpu/isolated
+
+For Cross-Compiling :
+aarch64-linux-gnu-gcc <file.c> -o <exe.file>
+
+--->To know the Space of each Folder : sudo du -h --max-depth=1
+
+--->To set Static IP : ifconfig eth0 <IP> up
+
+--->To Know the Process ID : pidof <Binary File>
+
+--->To know a Particular section memory in Bytes format by using Objump command :
+objdump -t a.out | grep .text | awk '{print $2}' | printf "%d" 0x00000272
+
+--->In DPDK Application : Huge Pages Creation
+vi /etc/default/grub
+
+--->To Zip a Folder :
+zip -r compressed_folder_name.zip folder_to_compress
+Where compressed_folder_name.zip is the name you want to give to the compressed folder, and folder_to_compress is the name of the folder you want to zip.
