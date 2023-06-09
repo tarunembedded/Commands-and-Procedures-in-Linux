@@ -1,6 +1,30 @@
 ***To Run UEapp on x86
     cp ~/ueapp-deps-x86/asn1c/asn1c/asn1c ./
-export RTE_SDK=/home/wisig/ueapp-deps-x86/dpdk-c-build/dpdk-stable-20.02.1/
+export RTE_SDK=/home/wisig/ueapp-deps-x86/dpdk-c-build/dpdk-stable-20.02.1/***To Run UEapp on ARM board
+l
+cp ~/ueapp-deps-arm/asn1c/asn1c/asn1c ./
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+./configure --armlibc=/tools/Xilinx/SDK/2018.3/gnu/aarch64/lin/aarch64 -linux/aarch64-linux-gnu/libc/usr/include --generate-asn1c
+make clean;make -j9
+binary file
+*** this on arm customized terminal***
+lib* x6 files and .json files 3 copy to arm terminal
+copy lib* to /usr/lib/ or copy libnuma.so.1 to /usr/lib64/
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+cat /proc/meminfo
+sudo ./build/ueapp --file-prefix=0
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start
 export RTE_TARGET=x86_64-native-linux-gcc
 ./configure –generate-asn1c 
 
@@ -75,7 +99,31 @@ zcat patch-4.19-rt1.patch.gz | patch -p1
 7) Images will create in {/build/tmp-glibc/deploy/images/ (xilinx-zynqmp / bcm-2xxx-rpi4)}
 8) Change the menuconfigurations -
     { bitbake -c menuconfig linux-yocto }
-9) do_build -
+9) do_build -***To Run UEapp on ARM board
+l
+cp ~/ueapp-deps-arm/asn1c/asn1c/asn1c ./
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+./configure --armlibc=/tools/Xilinx/SDK/2018.3/gnu/aarch64/lin/aarch64 -linux/aarch64-linux-gnu/libc/usr/include --generate-asn1c
+make clean;make -j9
+binary file
+*** this on arm customized terminal***
+lib* x6 files and .json files 3 copy to arm terminal
+copy lib* to /usr/lib/ or copy libnuma.so.1 to /usr/lib64/
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+cat /proc/meminfo
+sudo ./build/ueapp --file-prefix=0
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start              
     { bitbake -C do_build linux-yocto }
 10) { bitbake wrlinux-image-small }
 
@@ -132,17 +180,62 @@ tar -xvf  rootfs.tar.gz -C /media/rootfs/
 > root@xilinx-zcu102-2017_3:~# echo 1 > /sys/class/gpio/gpio338/value
 
 
->lttng-ust for function level profiling
-gcc   -g -finstrument-functions
+--> LTTng-ust for Function Level Profiling :
+gcc <sample.c> -o out -g -finstrument-functions
+lttng create <filename>
 lttng enable-event -u -a
 lttng add-context -u -t vpid -t ip
 lttng add-context -u -t vpid -t vtid -t procname
-LD_PRELOAD=/path/to/liblttng-ust-dl.so ./myprogram     or for arm LD_PRELOAD=/path/to/liblttng-ust-dl.so.0
+We also need to enable the "lttng_ust_dl” for this need to do in ARM based terminal
+LD_PRELOAD=/path/to/liblttng-ust-dl.so ./myprogram  (Eg : LD_PRELOAD=/usr/lib64/liblttng-ust-dl.so.0 ./demo) 
+Next start lttng with
+lttng start
 LD_PRELOAD=/usr/lib/liblttng-ust-cyg-profile.so ./myprogram
+                        (or)
+LD_PRELOAD=/usr/lib64/liblttng-ust-cyg-profile-fast.so.0 ./demo
+lttng stop
+lttng destroy
 
+--> LTTng for Kernel Level Profiling :
+i) lttng create <my-session>
+After creating the session, we have to enable events to record. The following command enables all events in the kernel.
+ii) lttng enable-event -a -k
+After events are enabled, start the tracing.***To Run UEapp on ARM board
+l
+cp ~/ueapp-deps-arm/asn1c/asn1c/asn1c ./
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+./configure --armlibc=/tools/Xilinx/SDK/2018.3/gnu/aarch64/lin/aarch64 -linux/aarch64-linux-gnu/libc/usr/include --generate-asn1c
+make clean;make -j9
+binary file
+*** this on arm customized terminal***
+lib* x6 files and .json files 3 copy to arm terminal
+copy lib* to /usr/lib/ or copy libnuma.so.1 to /usr/lib64/
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+cat /proc/meminfo
+sudo ./build/ueapp --file-prefix=0
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start
+iii) lttng start
+Here run your application which you want to trace
+After sometime stop the tracing
+iv) lttng stop
+To view the traced data in terminal
+v) lttng view (this makes sure that the tracing done successfully)
+To stop the tracing completely
+vi) lttng destroy <my-session>
 
 >adding pl to windriver image on board
-design_1_wrapper.hdf make this file ti zip
+design_1_wrapper.hdf make this file to zip
 unzip file and create
     $vi bootbi.bif
         all:
@@ -175,4 +268,37 @@ gcc -pg -ggdb3 -O3 -std=c99 -Wall -Wextra -pedantic -o main.out main.c
 Sudo ifconfig eth0 190.168.74.120 up
 sudo ifconfig eno1 190.168.74.120 down
 
+Path to Check Ethernet : /sys/class/net/eth0/operstate
+
+***To Run UEapp on x86***
+cp ~/ueapp-deps-x86/asn1c/asn1c/asn1c ./
+export RTE_SDK=/home/wisig/ueapp-deps-x86/dpdk-c-build/dpdk-stable-20.02.1/
+export RTE_TARGET=x86_64-native-linux-gcc
+./configure –generate-asn1c
+
+
+***To Run UEapp on ARM board***
+cp ~/ueapp-deps-arm/asn1c/asn1c/asn1c ./
+source /tools/Xilinx/Vivado/2018.3/settings64.sh
+export RTE_SDK=/home/wisig/ueapp-deps-arm/dpdk-c-build/dpdk-stable-20.02.1
+export RTE_TARGET=arm64-armv8a-linux-gcc
+./configure --armlibc=/tools/Xilinx/SDK/2018.3/gnu/aarch64/lin/aarch64 -linux/aarch64-linux-gnu/libc/usr/include --generate-asn1c
+make clean;make -j9
+binary file
+*** this on arm customized terminal***
+lib* x6 files and .json files 3 copy to arm terminal
+copy lib* to /usr/lib/ or copy libnuma.so.1 to /usr/lib64/
+mkdir /mnt/huge
+mount -t hugetlbfs nodev /mnt/huge
+su
+echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+cat /proc/meminfo
+sudo ./build/ueapp --file-prefix=0
+wue>> debug
+wue(debug)>> sdtdout
+diea
+wue(debug)(stdout)>> back 2
+wue>> run
+wue(run)>> ue
+start
 
